@@ -1,6 +1,7 @@
 const express = require('express');
 const app = express();
 const dotenv = require('dotenv');
+const cors = require('cors');
 const jwt = require('jsonwebtoken');
 
 const users = [{
@@ -10,6 +11,8 @@ const users = [{
     email: "zaphod@gmail.com"
 }];
 
+app.use(cors());
+
 dotenv.config();
 
 function generateToken(data) {
@@ -17,6 +20,43 @@ function generateToken(data) {
 }
 
 app.use(express.json());
+
+const authenticateJWT = (req, res, next) => {
+    const authHeader = req.headers.authorization;
+
+    if (authHeader) {
+        const token = authHeader.split(' ')[1];
+
+        jwt.verify(token, process.env.TOKEN_SECRET, (err, user) => {
+            if (err) {
+                return res.sendStatus(403);
+            }
+
+            req.user = user;
+            next();
+        });
+    } else {
+        res.sendStatus(401);
+    }
+};
+
+app.get('/user', authenticateJWT,(req, res) => {
+    const {email} = req.user;
+
+    const user = users.find(u => u.email === email);
+
+    if(user){
+        res.json({
+            user: {
+                email: user.email,
+                name: user.name,
+                role: user.role
+            }
+        });
+    }else{
+        res.status(401).send('Account does not exist');
+    }
+});
 
 app.post('/login', (req, res) => {
     const { email, password } = req.body;
@@ -27,14 +67,19 @@ app.post('/login', (req, res) => {
         const token = generateToken({role: user.role, email: user.email, name: user.name});
 
         res.json({
-            accessToken: token
+            accessToken: token,
+            user: {
+                email: user.email,
+                name: user.name,
+                role: user.role
+            }
         });
     } else {
-        res.send('Username or password incorrect');
+        res.status(401).send('Username or password incorrect');
     }
 });
 
-app.listen(3000, () => {
+app.listen(3001, () => {
     console.log('Authentication service started on port 3000');
 });
 
